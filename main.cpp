@@ -90,14 +90,17 @@ int main()
 		vk::MemoryAllocateInfo InBufferMemoryAllocateInfo(InBufferMemoryRequirements.size, MemoryTypeIndex);
 		vk::MemoryAllocateInfo OutBufferMemoryAllocateInfo(OutBufferMemoryRequirements.size, MemoryTypeIndex);
 		vk::DeviceMemory InBufferMemory = Device.allocateMemory(InBufferMemoryAllocateInfo);
-		vk::DeviceMemory OutBufferMemory = Device.allocateMemory(InBufferMemoryAllocateInfo);
+		vk::DeviceMemory OutBufferMemory = Device.allocateMemory(OutBufferMemoryAllocateInfo);
 
 		int32_t* InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
+		int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
 		for (int32_t I = 0; I < NumElements; ++I)
 		{
 			InBufferPtr[I] = I;
+			OutBufferPtr[I] = 0;
 		}
 		Device.unmapMemory(InBufferMemory);
+		Device.unmapMemory(OutBufferMemory);
 
 		Device.bindBufferMemory(InBuffer, InBufferMemory, 0);
 		Device.bindBufferMemory(OutBuffer, OutBufferMemory, 0);
@@ -187,19 +190,13 @@ int main()
 							 uint64_t(-1));		// Timeout
 
 		InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
+		OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
 		for (uint32_t I = 0; I < NumElements; ++I)
 		{
-			std::cout << InBufferPtr[I] << " ";
+			std::cout << InBufferPtr[I] << " = " << OutBufferPtr[I] << "\n";
 		}
 		std::cout << std::endl;
 		Device.unmapMemory(InBufferMemory);
-
-		int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
-		for (uint32_t I = 0; I < NumElements; ++I)
-		{
-			std::cout << OutBufferPtr[I] << " ";
-		}
-		std::cout << std::endl;
 		Device.unmapMemory(OutBufferMemory);
 
 		Device.freeMemory(InBufferMemory);
