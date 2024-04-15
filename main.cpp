@@ -1,15 +1,7 @@
 #include <iostream>
 #include <fstream>
 
-// Comment this to disable VMA support
-#define WITH_VMA
-
 #include <vulkan/vulkan.hpp>
-
-#ifdef WITH_VMA
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
-#endif
 
 int main()
 {
@@ -70,50 +62,6 @@ int main()
 		};
 		auto vkBufferCreateInfo = static_cast<VkBufferCreateInfo>(BufferCreateInfo);
 
-#ifdef WITH_VMA
-		VmaAllocatorCreateInfo AllocatorInfo = {};
-		AllocatorInfo.vulkanApiVersion = DeviceProps.apiVersion;
-		AllocatorInfo.physicalDevice = PhysicalDevice;
-		AllocatorInfo.device = Device;
-		AllocatorInfo.instance = Instance;
-
-		VmaAllocator Allocator;
-		vmaCreateAllocator(&AllocatorInfo, &Allocator);
-
-		VkBuffer InBufferRaw;
-		VkBuffer OutBufferRaw;
-
-		VmaAllocationCreateInfo AllocationInfo = {};
-		AllocationInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-		VmaAllocation InBufferAllocation;
-		vmaCreateBuffer(Allocator,
-						&vkBufferCreateInfo,
-						&AllocationInfo,
-						&InBufferRaw,
-						&InBufferAllocation,
-						nullptr);
-
-		AllocationInfo.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-		VmaAllocation OutBufferAllocation;
-		vmaCreateBuffer(Allocator,
-						&vkBufferCreateInfo,
-						&AllocationInfo,
-						&OutBufferRaw,
-						&OutBufferAllocation,
-						nullptr);
-
-		vk::Buffer InBuffer = InBufferRaw;
-		vk::Buffer OutBuffer = OutBufferRaw;
-
-		int32_t* InBufferPtr = nullptr;
-		vmaMapMemory(Allocator, InBufferAllocation, reinterpret_cast<void**>(&InBufferPtr));
-		for (int32_t I = 0; I < NumElements; ++I)
-		{
-			InBufferPtr[I] = I;
-		}
-		vmaUnmapMemory(Allocator, InBufferAllocation);
-#else
 		vk::Buffer InBuffer = Device.createBuffer(BufferCreateInfo);
 		vk::Buffer OutBuffer = Device.createBuffer(BufferCreateInfo);
 
@@ -153,7 +101,6 @@ int main()
 
 		Device.bindBufferMemory(InBuffer, InBufferMemory, 0);
 		Device.bindBufferMemory(OutBuffer, OutBufferMemory, 0);
-#endif
 
 		std::vector<char> ShaderContents;
 		if (std::ifstream ShaderFile{ "Square.spv", std::ios::binary | std::ios::ate })
@@ -239,85 +186,6 @@ int main()
 							 true,				// Wait All
 							 uint64_t(-1));		// Timeout
 
-#ifdef WITH_VMA
-		vmaMapMemory(Allocator, InBufferAllocation, reinterpret_cast<void**>(&InBufferPtr));
-		for (uint32_t I = 0; I < NumElements; ++I)
-		{
-			std::cout << InBufferPtr[I] << " ";
-		}
-		std::cout << std::endl;
-		vmaUnmapMemory(Allocator, InBufferAllocation);
-
-		int32_t* OutBufferPtr = nullptr;
-		vmaMapMemory(Allocator, OutBufferAllocation, reinterpret_cast<void**>(&OutBufferPtr));
-		for (uint32_t I = 0; I < NumElements; ++I)
-		{
-			std::cout << OutBufferPtr[I] << " ";
-		}
-		std::cout << std::endl;
-		vmaUnmapMemory(Allocator, OutBufferAllocation);
-
-		struct BufferInfo
-		{
-			VkBuffer Buffer;
-			VmaAllocation Allocation;
-		};
-
-		// Lets allocate a couple of buffers to see how they are layed out in memory
-		auto AllocateBuffer = [Allocator, ComputeQueueFamilyIndex](size_t SizeInBytes, VmaMemoryUsage Usage)
-		{
-			vk::BufferCreateInfo BufferCreateInfo{
-				vk::BufferCreateFlags(),					// Flags
-				SizeInBytes,								// Size
-				vk::BufferUsageFlagBits::eStorageBuffer,	// Usage
-				vk::SharingMode::eExclusive,				// Sharing mode
-				1,											// Number of queue family indices
-				&ComputeQueueFamilyIndex					// List of queue family indices
-			};
-
-			auto vkBufferCreateInfo = static_cast<VkBufferCreateInfo>(BufferCreateInfo);
-
-			VmaAllocationCreateInfo AllocationInfo = {};
-			AllocationInfo.usage = Usage;
-
-			BufferInfo Info;
-			vmaCreateBuffer(Allocator,
-							&vkBufferCreateInfo,
-							&AllocationInfo,
-							&Info.Buffer,
-							&Info.Allocation,
-							nullptr);
-
-			return Info;
-		};
-
-		auto DestroyBuffer = [Allocator](BufferInfo Info)
-		{
-			vmaDestroyBuffer(Allocator, Info.Buffer, Info.Allocation);
-		};
-
-		constexpr size_t MB = 1024 * 1024;
-		BufferInfo B1 = AllocateBuffer(4 * MB, VMA_MEMORY_USAGE_CPU_TO_GPU);
-		BufferInfo B2 = AllocateBuffer(10 * MB, VMA_MEMORY_USAGE_GPU_TO_CPU);
-		BufferInfo B3 = AllocateBuffer(20 * MB, VMA_MEMORY_USAGE_GPU_ONLY);
-		BufferInfo B4 = AllocateBuffer(100 * MB, VMA_MEMORY_USAGE_CPU_ONLY);
-
-		{
-			VmaStats Stats;
-			char* StatsString = nullptr;
-			vmaBuildStatsString(Allocator, &StatsString, true);
-			{
-				std::ofstream OutStats{ "VmaStats_2.json" };
-				OutStats << StatsString;
-			}
-			vmaFreeStatsString(Allocator, StatsString);
-		}
-
-		DestroyBuffer(B1);
-		DestroyBuffer(B2);
-		DestroyBuffer(B3);
-		DestroyBuffer(B4);
-#else
 		InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
 		for (uint32_t I = 0; I < NumElements; ++I)
 		{
@@ -334,26 +202,10 @@ int main()
 		std::cout << std::endl;
 		Device.unmapMemory(OutBufferMemory);
 
-#endif
-
-#ifdef WITH_VMA
-		char* StatsString = nullptr;
-		vmaBuildStatsString(Allocator, &StatsString, true);
-		{
-			std::ofstream OutStats{ "VmaStats.json" };
-			OutStats << StatsString;
-		}
-		vmaFreeStatsString(Allocator, StatsString);
-
-		vmaDestroyBuffer(Allocator, InBuffer, InBufferAllocation);
-		vmaDestroyBuffer(Allocator, OutBuffer, OutBufferAllocation);
-		vmaDestroyAllocator(Allocator);
-#else
 		Device.freeMemory(InBufferMemory);
 		Device.freeMemory(OutBufferMemory);
 		Device.destroyBuffer(InBuffer);
 		Device.destroyBuffer(OutBuffer);
-#endif
 
 		Device.resetCommandPool(CommandPool, vk::CommandPoolResetFlags());
 		Device.destroyFence(Fence);
