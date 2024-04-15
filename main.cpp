@@ -131,7 +131,7 @@ int main()
 		vk::PipelineShaderStageCreateInfo PipelineShaderCreateInfo(vk::PipelineShaderStageCreateFlags(),  // Flags
 																   vk::ShaderStageFlagBits::eCompute,     // Stage
 																   ShaderModule,					      // Shader Module
-																   "Main");								  // Shader Entry Point
+																   "main");								  // Shader Entry Point
 		vk::ComputePipelineCreateInfo ComputePipelineCreateInfo(vk::PipelineCreateFlags(),	// Flags
 																PipelineShaderCreateInfo,	// Shader Create Info struct
 																PipelineLayout);			// Pipeline Layout
