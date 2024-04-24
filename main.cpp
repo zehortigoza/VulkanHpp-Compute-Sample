@@ -49,7 +49,7 @@ int main()
 											  DeviceQueueCreateInfo);  // Device Queue Create Info struct
 		vk::Device Device = PhysicalDevice.createDevice(DeviceCreateInfo);
 
-		const uint32_t NumElements = 10;
+		const uint32_t NumElements = 256;
 		const uint32_t BufferSize = NumElements * sizeof(int32_t);
 
 		vk::BufferCreateInfo BufferCreateInfo{
@@ -63,10 +63,12 @@ int main()
 		auto vkBufferCreateInfo = static_cast<VkBufferCreateInfo>(BufferCreateInfo);
 
 		vk::Buffer InBuffer = Device.createBuffer(BufferCreateInfo);
-		vk::Buffer OutBuffer = Device.createBuffer(BufferCreateInfo);
+		vk::Buffer OutXBuffer = Device.createBuffer(BufferCreateInfo);
+		vk::Buffer OutYBuffer = Device.createBuffer(BufferCreateInfo);
+		vk::Buffer OutZBuffer = Device.createBuffer(BufferCreateInfo);
 
 		vk::MemoryRequirements InBufferMemoryRequirements = Device.getBufferMemoryRequirements(InBuffer);
-		vk::MemoryRequirements OutBufferMemoryRequirements = Device.getBufferMemoryRequirements(OutBuffer);
+		vk::MemoryRequirements OutBufferMemoryRequirements = Device.getBufferMemoryRequirements(OutXBuffer);
 
 		vk::PhysicalDeviceMemoryProperties MemoryProperties = PhysicalDevice.getMemoryProperties();
 
@@ -90,20 +92,30 @@ int main()
 		vk::MemoryAllocateInfo InBufferMemoryAllocateInfo(InBufferMemoryRequirements.size, MemoryTypeIndex);
 		vk::MemoryAllocateInfo OutBufferMemoryAllocateInfo(OutBufferMemoryRequirements.size, MemoryTypeIndex);
 		vk::DeviceMemory InBufferMemory = Device.allocateMemory(InBufferMemoryAllocateInfo);
-		vk::DeviceMemory OutBufferMemory = Device.allocateMemory(OutBufferMemoryAllocateInfo);
+		vk::DeviceMemory OutXBufferMemory = Device.allocateMemory(OutBufferMemoryAllocateInfo);
+		vk::DeviceMemory OutYBufferMemory = Device.allocateMemory(OutBufferMemoryAllocateInfo);
+		vk::DeviceMemory OutZBufferMemory = Device.allocateMemory(OutBufferMemoryAllocateInfo);
 
 		int32_t* InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
-		int32_t* OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
+		int32_t* OutXBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutXBufferMemory, 0, BufferSize));
+		int32_t* OutYBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutYBufferMemory, 0, BufferSize));
+		int32_t* OutZBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutZBufferMemory, 0, BufferSize));
 		for (int32_t I = 0; I < NumElements; ++I)
 		{
 			InBufferPtr[I] = I;
-			OutBufferPtr[I] = 0;
+			OutXBufferPtr[I] = 42;
+			OutYBufferPtr[I] = 42;
+			OutZBufferPtr[I] = 42;
 		}
 		Device.unmapMemory(InBufferMemory);
-		Device.unmapMemory(OutBufferMemory);
+		Device.unmapMemory(OutXBufferMemory);
+		Device.unmapMemory(OutYBufferMemory);
+		Device.unmapMemory(OutZBufferMemory);
 
 		Device.bindBufferMemory(InBuffer, InBufferMemory, 0);
-		Device.bindBufferMemory(OutBuffer, OutBufferMemory, 0);
+		Device.bindBufferMemory(OutXBuffer, OutXBufferMemory, 0);
+		Device.bindBufferMemory(OutYBuffer, OutYBufferMemory, 0);
+		Device.bindBufferMemory(OutZBuffer, OutZBufferMemory, 0);
 
 		std::vector<char> ShaderContents;
 		if (std::ifstream ShaderFile{ "Square.spv", std::ios::binary | std::ios::ate })
@@ -121,7 +133,9 @@ int main()
 
 		const std::vector<vk::DescriptorSetLayoutBinding> DescriptorSetLayoutBinding = {
 			{0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
-			{1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}
+			{1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
+			{2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute},
+			{3, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute}
 		};
 		vk::DescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo(vk::DescriptorSetLayoutCreateFlags(),
 																		DescriptorSetLayoutBinding);
@@ -140,7 +154,7 @@ int main()
 																PipelineLayout);			// Pipeline Layout
 		vk::Pipeline ComputePipeline = Device.createComputePipeline(PipelineCache, ComputePipelineCreateInfo).value;
 
-		vk::DescriptorPoolSize DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 2);
+		vk::DescriptorPoolSize DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 4);
 		vk::DescriptorPoolCreateInfo DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlags(), 1, DescriptorPoolSize);
 		vk::DescriptorPool DescriptorPool = Device.createDescriptorPool(DescriptorPoolCreateInfo);
 
@@ -148,11 +162,15 @@ int main()
 		const std::vector<vk::DescriptorSet> DescriptorSets = Device.allocateDescriptorSets(DescriptorSetAllocInfo);
 		vk::DescriptorSet DescriptorSet = DescriptorSets.front();
 		vk::DescriptorBufferInfo InBufferInfo(InBuffer, 0, NumElements * sizeof(int32_t));
-		vk::DescriptorBufferInfo OutBufferInfo(OutBuffer, 0, NumElements * sizeof(int32_t));
+		vk::DescriptorBufferInfo OutXBufferInfo(OutXBuffer, 0, NumElements * sizeof(int32_t));
+		vk::DescriptorBufferInfo OutYBufferInfo(OutYBuffer, 0, NumElements * sizeof(int32_t));
+		vk::DescriptorBufferInfo OutZBufferInfo(OutZBuffer, 0, NumElements * sizeof(int32_t));
 
 		const std::vector<vk::WriteDescriptorSet> WriteDescriptorSets = {
 			{DescriptorSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &InBufferInfo},
-			{DescriptorSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &OutBufferInfo},
+			{DescriptorSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &OutXBufferInfo},
+			{DescriptorSet, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &OutYBufferInfo},
+			{DescriptorSet, 3, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &OutZBufferInfo},
 		};
 		Device.updateDescriptorSets(WriteDescriptorSets, {});
 
@@ -173,7 +191,7 @@ int main()
 									 0,								    // First descriptor set
 									 { DescriptorSet },					// List of descriptor sets
 									 {});								// Dynamic offsets
-		CmdBuffer.dispatch(NumElements, 1, 1);
+		CmdBuffer.dispatch(4, 4, 1);
 		CmdBuffer.end();
 
 		vk::Queue Queue = Device.getQueue(ComputeQueueFamilyIndex, 0);
@@ -190,19 +208,30 @@ int main()
 							 uint64_t(-1));		// Timeout
 
 		InBufferPtr = static_cast<int32_t*>(Device.mapMemory(InBufferMemory, 0, BufferSize));
-		OutBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutBufferMemory, 0, BufferSize));
+		OutXBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutXBufferMemory, 0, BufferSize));
+		OutYBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutYBufferMemory, 0, BufferSize));
+		OutZBufferPtr = static_cast<int32_t*>(Device.mapMemory(OutZBufferMemory, 0, BufferSize));
 		for (uint32_t I = 0; I < NumElements; ++I)
 		{
-			std::cout << InBufferPtr[I] << " = " << OutBufferPtr[I] << "\n";
+			std::cout << "i=" << I << " input=" << InBufferPtr[I] << " | ";
+			std::cout << "outX=" << OutXBufferPtr[I] << " | ";
+			std::cout << "outY=" << OutYBufferPtr[I] << " | ";
+			std::cout << "outZ=" << OutZBufferPtr[I] << "\n";
 		}
 		std::cout << std::endl;
 		Device.unmapMemory(InBufferMemory);
-		Device.unmapMemory(OutBufferMemory);
+		Device.unmapMemory(OutXBufferMemory);
+		Device.unmapMemory(OutYBufferMemory);
+		Device.unmapMemory(OutZBufferMemory);
 
 		Device.freeMemory(InBufferMemory);
-		Device.freeMemory(OutBufferMemory);
+		Device.freeMemory(OutXBufferMemory);
+		Device.freeMemory(OutYBufferMemory);
+		Device.freeMemory(OutZBufferMemory);
 		Device.destroyBuffer(InBuffer);
-		Device.destroyBuffer(OutBuffer);
+		Device.destroyBuffer(OutXBuffer);
+		Device.destroyBuffer(OutYBuffer);
+		Device.destroyBuffer(OutZBuffer);
 
 		Device.resetCommandPool(CommandPool, vk::CommandPoolResetFlags());
 		Device.destroyFence(Fence);
